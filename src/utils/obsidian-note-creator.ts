@@ -20,6 +20,18 @@ export interface IgnisSaveResult {
 	verified: boolean;
 }
 
+function formatIgnisResponseError(status: number, responseText: string): string {
+	const responseBody = responseText.trim();
+	if (responseBody.startsWith('(()=>{') || responseBody.includes('__webpack_modules__')) {
+		return `Ignis API error: ${status}. The server returned JavaScript instead of an API response. Check the Ignis URL and reverse-proxy routing.`;
+	}
+
+	const detail = responseBody
+		? `${responseBody.slice(0, 240)}${responseBody.length > 240 ? '…' : ''}`
+		: 'No response body';
+	return `Ignis API error: ${status} ${detail}`;
+}
+
 function openObsidianUrl(url: string): void {
 	browser.runtime.sendMessage({
 		action: "openObsidianUrl",
@@ -125,7 +137,7 @@ export async function saveToIgnis(
 		throw new Error(`Cannot connect to Ignis: ${result.error}`);
 	}
 	if (!result?.ok) {
-		throw new Error(`Ignis API error: ${result?.status} ${result?.text || 'No response body'}`);
+		throw new Error(formatIgnisResponseError(result?.status ?? 0, result?.text ?? ''));
 	}
 
 	let verified = false;
@@ -156,7 +168,7 @@ export async function saveToIgnis(
 			throw new Error(`Cannot verify Ignis write: ${readback.error}`);
 		}
 		if (!readback?.ok) {
-			throw new Error(`Cannot verify Ignis write (${readback?.status}): ${readback?.text || 'No response body'}`);
+			throw new Error(`Cannot verify Ignis write. ${formatIgnisResponseError(readback?.status ?? 0, readback?.text ?? '')}`);
 		}
 		if (readback.text !== fileContent) {
 			const actualSize = new TextEncoder().encode(readback.text).byteLength;
