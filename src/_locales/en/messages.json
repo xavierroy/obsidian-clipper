@@ -926,6 +926,18 @@
 	"saveFile": {
 		"message": "Save file..."
 	},
+	"addToIgnis": {
+		"message": "Add to Ignis"
+	},
+	"savedToIgnis": {
+		"message": "Saved to Ignis!"
+	},
+	"savedToIgnisDetails": {
+		"message": "Saved to Ignis: $1 ($2 words, $3 bytes sent)."
+	},
+	"savedToIgnisVerified": {
+		"message": "Saved and verified in Ignis: $1 ($2 words, $3 bytes)."
+	},
 	"searchHighlightsPlaceholder": {
 		"message": "Search highlights…"
 	},

@@ -148,7 +148,31 @@
 								</div>
 							</div>
 							<div class="setting-group">
-								<div class="setting-item setting-item-heading"><h3 data-i18n="behavior">Behavior</h3></div>
+							<div class="setting-group">
+								<div class="setting-item setting-item-heading"><h3 data-i18n="ignisIntegration">Ignis Integration</h3></div>
+								<div class="setting-items">
+									<div class="setting-item mod-horizontal">
+										<div class="setting-item-info">
+											<label for="ignis-url" data-i18n="ignisUrl">Ignis URL</label>
+											<div class="setting-item-description" data-i18n="ignisUrlDescription">Base URL of your Ignis-hosted online Obsidian vault.</div>
+										</div>
+										<div class="setting-item-control">
+											<input type="text" id="ignis-url" placeholder="https://notes.xavierroy.in" autocomplete="off" spellcheck="false" />
+										</div>
+									</div>
+									<div class="setting-item mod-horizontal">
+										<div class="setting-item-info">
+											<label for="ignis-auth-token" data-i18n="ignisAuthToken">Ignis Auth Token</label>
+											<div class="setting-item-description" data-i18n="ignisAuthTokenDescription">Format: username:password (for Basic Auth).</div>
+										</div>
+										<div class="setting-item-control">
+											<input type="text" id="ignis-auth-token" placeholder="xavierroy:[REDACTED]" autocomplete="off" spellcheck="false" />
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div class="setting-group" id="hotkeys-subsection">								<div class="setting-item setting-item-heading"><h3 data-i18n="behavior">Behavior</h3></div>
 								<div class="setting-items">
 									<div class="setting-item mod-horizontal">
 										<div class="setting-item-info">
@@ -158,12 +182,24 @@
 											</div>
 										</div>
 										<div class="setting-item-control">
-											<select id="save-behavior-dropdown">
-												<option value="addToObsidian" selected data-i18n="addToObsidian">Add to Obsidian</option>
-												<option value="copyToClipboard" data-i18n="copyToClipboard">Copy to clipboard</option>
-												<option value="saveFile" data-i18n="saveFile">Save file</option>
-											</select>
-										</div>
+														<select id="save-behavior-dropdown">
+															<option value="addToObsidian" selected data-i18n="addToObsidian">Add to Obsidian</option>
+															<option value="copyToClipboard" data-i18n="copyToClipboard">Copy to clipboard</option>
+															<option value="saveFile" data-i18n="saveFile">Save file</option>
+															<option value="addToIgnis" data-i18n="addToIgnis">Add to Ignis</option>
+														</select>
+													</div>
+				<div class="setting-item mod-horizontal mod-toggle">
+					<div class="setting-item-info">
+						<label for="use-ignis-toggle" data-i18n="useIgnis">Use Ignis</label>
+						<div class="setting-item-description" data-i18n="useIgnisDescription">Enable direct save to Ignis online vault instead of obsidian:// URI</div>
+					</div>
+					<div class="setting-item-control">
+						<div class="checkbox-container">
+							<input type="checkbox" id="use-ignis-toggle" />
+						</div>
+					</div>
+				</div>
 									</div>
 									<div class="setting-item mod-horizontal">
 										<div class="setting-item-info">

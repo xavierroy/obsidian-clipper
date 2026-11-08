@@ -8,6 +8,10 @@ export const runtime = {
 	},
 };
 
+export const permissions = {
+	request: async () => true,
+};
+
 export const storage = {
 	local: {
 		get: async () => ({}),
@@ -34,6 +38,7 @@ export const i18n = {
 
 export default {
 	runtime,
+	permissions,
 	storage,
 	tabs,
 	i18n,

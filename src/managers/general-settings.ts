@@ -168,74 +168,74 @@ async function initializeVersionDisplay(): Promise<void> {
 	}
 }
 
-export function initializeGeneralSettings(): void {
-	loadSettings().then(async () => {
-		await setupLanguageAndDirection();
+export async function initializeGeneralSettings(): Promise<void> {
+	await loadSettings();
+	await setupLanguageAndDirection();
 
-		// Add version check initialization
-		await initializeVersionDisplay();
+	// Add version check initialization
+	await initializeVersionDisplay();
 
-		// Get clip history and ratings
-		const history = await getClipHistory();
-		const totalClips = history.filter(entry => entry.action !== 'readerMode').length;
-		const existingRatings = await getLocalStorage('ratings') || [];
+	// Get clip history and ratings
+	const history = await getClipHistory();
+	const totalClips = history.filter(entry => entry.action !== 'readerMode').length;
+	const existingRatings = await getLocalStorage('ratings') || [];
 
-		// Show rating section only total clips >= 20 and no previous ratings
-		const rateExtensionSection = document.getElementById('rate-extension');
-		if (rateExtensionSection && totalClips >= 20 && existingRatings.length === 0) {
-			rateExtensionSection.classList.remove('is-hidden');
-		}
+	// Show rating section only total clips >= 20 and no previous ratings
+	const rateExtensionSection = document.getElementById('rate-extension');
+	if (rateExtensionSection && totalClips >= 20 && existingRatings.length === 0) {
+		rateExtensionSection.classList.remove('is-hidden');
+	}
 
-		if (totalClips >= 20 && existingRatings.length === 0) {
-			const starRating = document.querySelector('.star-rating');
-			if (starRating) {
-				const stars = starRating.querySelectorAll('.star');
-				stars.forEach(star => {
-					star.addEventListener('click', async () => {
-						const rating = parseInt(star.getAttribute('data-rating') || '0');
-						stars.forEach(s => {
-							if (parseInt(s.getAttribute('data-rating') || '0') <= rating) {
-								s.classList.add('is-active');
-							} else {
-								s.classList.remove('is-active');
-							}
-						});
-						await handleRating(rating);
-						
-						// Hide the rating section after rating
-						if (rateExtensionSection) {
-							rateExtensionSection.style.display = 'none';
+	if (totalClips >= 20 && existingRatings.length === 0) {
+		const starRating = document.querySelector('.star-rating');
+		if (starRating) {
+			const stars = starRating.querySelectorAll('.star');
+			stars.forEach(star => {
+				star.addEventListener('click', async () => {
+					const rating = parseInt(star.getAttribute('data-rating') || '0');
+					stars.forEach(s => {
+						if (parseInt(s.getAttribute('data-rating') || '0') <= rating) {
+							s.classList.add('is-active');
+						} else {
+							s.classList.remove('is-active');
 						}
 					});
+					await handleRating(rating);
+
+					// Hide the rating section after rating
+					if (rateExtensionSection) {
+						rateExtensionSection.style.display = 'none';
+					}
 				});
-			}
+			});
 		}
+	}
 
-		updateVaultList();
-		initializeShowMoreActionsToggle();
-		initializeBetaFeaturesToggle();
-		initializeLegacyModeToggle();
-		initializeSilentOpenToggle();
-		initializeVaultInput();
-		initializeOpenBehaviorDropdown();
-		initializeKeyboardShortcuts();
-		initializeToggles();
-		setShortcutInstructions();
-		initializeAutoSave();
-		initializeResetDefaultTemplateButton();
-		initializeExportImportAllSettingsButtons();
-		initializeHighlighterSettings();
-		initializeExportHighlightsButton();
-		initializeSaveBehaviorDropdown();
-		await initializeUsageChart();
+	updateVaultList();
+	initializeShowMoreActionsToggle();
+	initializeBetaFeaturesToggle();
+	initializeLegacyModeToggle();
+	initializeSilentOpenToggle();
+	initializeIgnisSettings();
+	initializeVaultInput();
+	initializeOpenBehaviorDropdown();
+	initializeKeyboardShortcuts();
+	initializeToggles();
+	setShortcutInstructions();
+	initializeAutoSave();
+	initializeResetDefaultTemplateButton();
+	initializeExportImportAllSettingsButtons();
+	initializeHighlighterSettings();
+	initializeExportHighlightsButton();
+	initializeSaveBehaviorDropdown();
+	await initializeUsageChart();
 
-		// Initialize feedback modal close button
-		const feedbackModal = document.getElementById('feedback-modal');
-		const feedbackCloseBtn = feedbackModal?.querySelector('.feedback-close-btn');
-		if (feedbackCloseBtn) {
-			feedbackCloseBtn.addEventListener('click', () => hideModal(feedbackModal));
-		}
-	});
+	// Initialize feedback modal close button
+	const feedbackModal = document.getElementById('feedback-modal');
+	const feedbackCloseBtn = feedbackModal?.querySelector('.feedback-close-btn');
+	if (feedbackCloseBtn) {
+		feedbackCloseBtn.addEventListener('click', () => hideModal(feedbackModal));
+	}
 }
 
 function initializeAutoSave(): void {
@@ -256,7 +256,8 @@ function saveSettingsFromForm(): void {
 	const highlighterToggle = document.getElementById('highlighter-toggle') as HTMLInputElement;
 	const alwaysShowHighlightsToggle = document.getElementById('highlighter-visibility') as HTMLInputElement;
 	const highlightBehaviorSelect = document.getElementById('highlighter-behavior') as HTMLSelectElement;
-
+	const ignisUrlInput = document.getElementById('ignis-url') as HTMLInputElement;
+	const ignisAuthTokenInput = document.getElementById('ignis-auth-token') as HTMLInputElement;
 	const updatedSettings = {
 		...generalSettings, // Keep existing settings
 		openBehavior: (openBehaviorDropdown?.value as Settings['openBehavior']) ?? generalSettings.openBehavior,
@@ -266,10 +267,26 @@ function saveSettingsFromForm(): void {
 		silentOpen: silentOpenToggle?.checked ?? generalSettings.silentOpen,
 		highlighterEnabled: highlighterToggle?.checked ?? generalSettings.highlighterEnabled,
 		alwaysShowHighlights: alwaysShowHighlightsToggle?.checked ?? generalSettings.alwaysShowHighlights,
-		highlightBehavior: highlightBehaviorSelect?.value ?? generalSettings.highlightBehavior
+		highlightBehavior: highlightBehaviorSelect?.value ?? generalSettings.highlightBehavior,
+		ignisUrl: ignisUrlInput?.value ?? generalSettings.ignisUrl,
+		ignisAuthToken: ignisAuthTokenInput?.value ?? generalSettings.ignisAuthToken,
 	};
 
 	saveSettings(updatedSettings);
+}
+
+function initializeIgnisSettings(): void {
+	const ignisUrlInput = document.getElementById('ignis-url') as HTMLInputElement;
+	const ignisAuthTokenInput = document.getElementById('ignis-auth-token') as HTMLInputElement;
+
+	if (ignisUrlInput) ignisUrlInput.value = generalSettings.ignisUrl;
+	if (ignisAuthTokenInput) ignisAuthTokenInput.value = generalSettings.ignisAuthToken;
+
+	initializeSettingToggle('use-ignis-toggle', generalSettings.useIgnis, (checked) => {
+		saveSettings({ useIgnis: checked }).catch((error) => {
+			console.error('Failed to save Use Ignis setting:', error);
+		});
+	});
 }
 
 function initializeShowMoreActionsToggle(): void {
@@ -367,7 +384,7 @@ function initializeSaveBehaviorDropdown(): void {
 
     dropdown.value = generalSettings.saveBehavior;
     dropdown.addEventListener('change', () => {
-        const newValue = dropdown.value as 'addToObsidian' | 'copyToClipboard' | 'saveFile';
+        const newValue = dropdown.value as 'addToObsidian' | 'copyToClipboard' | 'saveFile' | 'addToIgnis';
         saveSettings({ saveBehavior: newValue });
     });
 }
