@@ -108,4 +108,28 @@ describe('saveToIgnis', () => {
 		await expect(saveToIgnis('article body', 'Article', '', 'Inbox', 'create'))
 			.rejects.toThrow('Ignis reported writing 0 bytes, but the clip contains 12 bytes');
 	});
+
+	test('replaces an unexpected JavaScript response with a concise diagnostic', async () => {
+		generalSettings.ignisUrl = 'https://notes.example';
+		vi.spyOn(browser.runtime, 'sendMessage').mockResolvedValue({
+			ok: false,
+			status: 404,
+			text: `(()=>{var __webpack_modules__=${'bundle content'.repeat(1000)}})()`,
+		});
+
+		await expect(saveToIgnis('article body', 'Article', '', 'Inbox', 'create'))
+			.rejects.toThrow('Ignis API error: 404. The server returned JavaScript instead of an API response.');
+	});
+
+	test('limits other server error details to a short preview', async () => {
+		generalSettings.ignisUrl = 'https://notes.example';
+		vi.spyOn(browser.runtime, 'sendMessage').mockResolvedValue({
+			ok: false,
+			status: 500,
+			text: 'x'.repeat(500),
+		});
+
+		await expect(saveToIgnis('article body', 'Article', '', 'Inbox', 'create'))
+			.rejects.toThrow(`Ignis API error: 500 ${'x'.repeat(240)}…`);
+	});
 });

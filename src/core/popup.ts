@@ -620,6 +620,9 @@ function showStatus(message: string): void {
 function showError(messageKey: string): void {
 	showStatus(getMessage(messageKey));
 }
+function showErrorText(message: string): void {
+	showStatus(message);
+}
 function clearError(): void {
 	const errorMessage = document.querySelector('.error-message') as HTMLElement;
 	const clipper = document.querySelector('.clipper') as HTMLElement;
@@ -1447,11 +1450,11 @@ async function handleClipIgnis(): Promise<void> {
 		console.error('[Ignis] Error in handleClipIgnis:', error);
 
 		if (error instanceof Error && error.message.startsWith('Cannot connect to Ignis:')) {
-			showError(error.message);
+			showErrorText(error.message);
 		} else if (error instanceof Error && error.message.startsWith('Host permission not granted')) {
-			showError(error.message);
+			showErrorText(error.message);
 		} else if (error instanceof Error && error.message.startsWith('Invalid Ignis URL.')) {
-			showError(error.message);
+			showErrorText(error.message);
 		} else if (error instanceof Error && (
 			error.message.startsWith('Ignis API error:')
 			|| error.message.startsWith('Ignis accepted the request')
@@ -1459,7 +1462,7 @@ async function handleClipIgnis(): Promise<void> {
 			|| error.message.startsWith('Cannot verify Ignis write')
 			|| error.message.startsWith('Ignis saved ')
 		)) {
-			showError(error.message);
+			showErrorText(error.message);
 		} else {
 			showError('failedToSaveFile');
 		}
