@@ -14,6 +14,12 @@ export async function generateFrontmatter(properties: Property[]): Promise<strin
 	return generateFrontmatterCore(properties, typeMap);
 }
 
+export interface IgnisSaveResult {
+	path: string;
+	byteCount: number;
+	verified: boolean;
+}
+
 function openObsidianUrl(url: string): void {
 	browser.runtime.sendMessage({
 		action: "openObsidianUrl",
@@ -26,7 +32,7 @@ function openObsidianUrl(url: string): void {
 
 async function tryClipboardWrite(fileContent: string, obsidianUrl: string): Promise<void> {
 	const success = await copyToClipboard(fileContent);
-	
+
 	if (success) {
 		// &clipboard tells Obsidian to read data from clipboard instead of the content param.
 		// content is a fallback shown only if Obsidian can't access the clipboard (e.g. on Linux).
@@ -43,6 +49,126 @@ async function tryClipboardWrite(fileContent: string, obsidianUrl: string): Prom
 	}
 }
 
+export async function saveToIgnis(
+	fileContent: string,
+	noteName: string,
+	path: string,
+	vault: string,
+	behavior: Template['behavior'],
+): Promise<IgnisSaveResult> {
+	let baseUrl: URL;
+	try {
+		baseUrl = new URL(generalSettings.ignisUrl.trim());
+	} catch {
+		throw new Error('Invalid Ignis URL. Open extension settings and enter a complete URL including https://.');
+	}
+	if (!['http:', 'https:'].includes(baseUrl.protocol) || !baseUrl.hostname) {
+		throw new Error('Invalid Ignis URL. Use an HTTP or HTTPS address in extension settings.');
+	}
+
+	const authToken = generalSettings.ignisAuthToken;
+
+	const endpoint = behavior.startsWith('append') || behavior.startsWith('prepend')
+		? '/api/fs/appendFile'
+		: '/api/fs/writeFile';
+
+	const sanitizedNoteName = sanitizeFileName(noteName);
+	const formattedNoteName = sanitizedNoteName.toLowerCase().endsWith('.md')
+		? sanitizedNoteName
+		: `${sanitizedNoteName}.md`;
+	const filePath = path ? `${path}/${formattedNoteName}` : formattedNoteName;
+	const selectedVault = vault || baseUrl.searchParams.get('vault') || 'Inbox';
+	const vaultValue = selectedVault.split('/').pop() || selectedVault;
+	const apiUrl = new URL(endpoint, baseUrl);
+	apiUrl.searchParams.set('vault', vaultValue);
+
+	const headers: Record<string, string> = {
+		'Content-Type': 'application/json',
+	};
+	if (authToken) {
+		headers.Authorization = `Basic ${btoa(unescape(encodeURIComponent(authToken)))}`;
+	}
+
+	const options = {
+		method: 'POST',
+		headers,
+		body: JSON.stringify({
+			path: filePath,
+			content: fileContent,
+			vault: selectedVault,
+			flush: true,
+		}),
+	};
+
+	type FetchProxyResult = { ok: boolean; status: number; text: string; error?: string };
+	const sendFetchProxy = (url: URL, requestOptions: RequestInit) => browser.runtime.sendMessage({
+		action: 'fetchProxy',
+		url: url.toString(),
+		options: requestOptions,
+	}) as Promise<FetchProxyResult>;
+
+	const sendRequest = async (url: URL, requestOptions: RequestInit): Promise<FetchProxyResult> => {
+		let result = await sendFetchProxy(url, requestOptions);
+		if (result?.error === 'CORS_PERMISSION_NEEDED') {
+			const granted = await browser.permissions.request({ origins: [`${url.origin}/*`] });
+			if (!granted) {
+				throw new Error(`Host permission not granted for ${url.origin}`);
+			}
+			result = await sendFetchProxy(url, requestOptions);
+		}
+
+		return result;
+	};
+
+	const result = await sendRequest(apiUrl, options);
+	if (result?.error) {
+		throw new Error(`Cannot connect to Ignis: ${result.error}`);
+	}
+	if (!result?.ok) {
+		throw new Error(`Ignis API error: ${result?.status} ${result?.text || 'No response body'}`);
+	}
+
+	let verified = false;
+	const byteCount = new TextEncoder().encode(fileContent).byteLength;
+	if (endpoint === '/api/fs/writeFile') {
+		let responseBody: { size?: unknown; flushed?: unknown } | null;
+		try {
+			responseBody = JSON.parse(result.text) as { size?: unknown };
+		} catch {
+			throw new Error('Ignis accepted the request but returned an unreadable write response. Check the deployed Ignis server version.');
+		}
+		if (!responseBody || typeof responseBody !== 'object' || typeof responseBody.size !== 'number') {
+			throw new Error('Ignis accepted the request but did not report the written file size. Update the Ignis server to verify the save.');
+		}
+		if (responseBody.flushed !== true) {
+			throw new Error('Ignis accepted the clip but did not confirm it was flushed to disk. Update and redeploy the Ignis server before clipping.');
+		}
+		if (responseBody.size !== byteCount) {
+			throw new Error(`Ignis reported writing ${responseBody.size} bytes, but the clip contains ${byteCount} bytes. Check the deployed Ignis server version and request-body parsing.`);
+		}
+
+		const readbackUrl = new URL('/api/fs/readFile', baseUrl);
+		readbackUrl.searchParams.set('path', filePath);
+		readbackUrl.searchParams.set('vault', vaultValue);
+		readbackUrl.searchParams.set('encoding', 'utf-8');
+		const readback = await sendRequest(readbackUrl, { method: 'GET', headers });
+		if (readback?.error) {
+			throw new Error(`Cannot verify Ignis write: ${readback.error}`);
+		}
+		if (!readback?.ok) {
+			throw new Error(`Cannot verify Ignis write (${readback?.status}): ${readback?.text || 'No response body'}`);
+		}
+		if (readback.text !== fileContent) {
+			const actualSize = new TextEncoder().encode(readback.text).byteLength;
+			throw new Error(`Ignis saved ${actualSize} bytes at the requested path, but the clip contains ${byteCount} bytes. Check the selected vault and file path.`);
+		}
+		verified = true;
+	}
+
+	console.log('Saved to Ignis:', apiUrl.toString());
+	return { path: filePath, byteCount, verified };
+}
+
 export async function saveToObsidian(
 	fileContent: string,
 	noteName: string,
@@ -50,6 +176,12 @@ export async function saveToObsidian(
 	vault: string,
 	behavior: Template['behavior'],
 ): Promise<void> {
+	// Route to Ignis if configured
+	if (generalSettings.useIgnis && generalSettings.ignisUrl) {
+		await saveToIgnis(fileContent, noteName, path, vault, behavior);
+		return;
+	}
+
 	let obsidianUrl: string;
 
 	const isDailyNote = behavior === 'append-daily' || behavior === 'prepend-daily';

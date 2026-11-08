@@ -92,10 +92,14 @@ export interface Settings {
 		copyToClipboard: number;
 		share: number;
 		readerMode: number;
+		addToIgnis: number;
 	};
 	history: HistoryEntry[];
 	ratings: Rating[];
-	saveBehavior: 'addToObsidian' | 'saveFile' | 'copyToClipboard';
+	saveBehavior: 'addToObsidian' | 'copyToClipboard' | 'saveFile' | 'addToIgnis';
+	useIgnis: boolean;
+	ignisUrl: string;
+	ignisAuthToken: string;
 }
 
 export interface ModelConfig {
@@ -109,7 +113,7 @@ export interface ModelConfig {
 export interface HistoryEntry {
 	datetime: string;
 	url: string;
-	action: 'addToObsidian' | 'saveFile' | 'copyToClipboard' | 'share' | 'readerMode';
+	action: 'addToObsidian' | 'saveFile' | 'copyToClipboard' | 'share' | 'readerMode' | 'addToIgnis';
 	title?: string;
 	vault?: string;
 	path?: string;

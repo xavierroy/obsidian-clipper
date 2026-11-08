@@ -43,11 +43,15 @@ export let generalSettings: Settings = {
 		saveFile: 0,
 		copyToClipboard: 0,
 		share: 0,
-		readerMode: 0
+		readerMode: 0,
+		addToIgnis: 0
 	},
 	history: [],
 	ratings: [],
-	saveBehavior: 'addToObsidian'
+	saveBehavior: 'addToObsidian',
+	useIgnis: false,
+	ignisUrl: '',
+	ignisAuthToken: ''
 };
 
 export function setLocalStorage(key: string, value: any): Promise<void> {
@@ -65,7 +69,10 @@ interface StorageData {
 		legacyMode?: boolean;
 		silentOpen?: boolean;
 		openBehavior?: boolean | 'popup' | 'embedded';
-		saveBehavior?: 'addToObsidian' | 'copyToClipboard' | 'saveFile';
+		saveBehavior?: 'addToObsidian' | 'copyToClipboard' | 'saveFile' | 'addToIgnis';
+		useIgnis?: boolean;
+		ignisUrl?: string;
+		ignisAuthToken?: string;
 	};
 	vaults?: string[];
 	highlighter_settings?: {
@@ -105,6 +112,7 @@ interface StorageData {
 		copyToClipboard: number;
 		share: number;
 		readerMode?: number;
+		addToIgnis: number;
 	};
 	history?: HistoryEntry[];
 	ratings?: Rating[];
@@ -115,7 +123,7 @@ const CURRENT_MIGRATION_VERSION = 1;
 
 export async function loadSettings(): Promise<Settings> {
 	const data = await browser.storage.sync.get(null) as StorageData;
-	
+
 	// Load default settings first
 	const defaultSettings: Settings = {
 		vaults: [],
@@ -135,6 +143,9 @@ export async function loadSettings(): Promise<Settings> {
 		defaultPromptContext: '',
 		propertyTypes: [],
 		saveBehavior: 'addToObsidian',
+		useIgnis: false,
+		ignisUrl: '',
+		ignisAuthToken: '',
 		readerSettings: {
 			fontSize: 16,
 			lineHeight: 1.6,
@@ -157,7 +168,8 @@ export async function loadSettings(): Promise<Settings> {
 			saveFile: 0,
 			copyToClipboard: 0,
 			share: 0,
-			readerMode: 0
+			readerMode: 0,
+			addToIgnis: 0
 		},
 		history: [],
 		ratings: [],
@@ -218,7 +230,10 @@ export async function loadSettings(): Promise<Settings> {
 		stats: { ...defaultSettings.stats, ...data.stats },
 		history: data.history || defaultSettings.history,
 		ratings: data.ratings || defaultSettings.ratings,
-		saveBehavior: data.general_settings?.saveBehavior ?? defaultSettings.saveBehavior
+		saveBehavior: data.general_settings?.saveBehavior ?? defaultSettings.saveBehavior,
+		useIgnis: data.general_settings?.useIgnis ?? defaultSettings.useIgnis,
+		ignisUrl: data.general_settings?.ignisUrl ?? defaultSettings.ignisUrl,
+		ignisAuthToken: data.general_settings?.ignisAuthToken ?? defaultSettings.ignisAuthToken
 	};
 
 	generalSettings = loadedSettings;
@@ -232,48 +247,51 @@ export async function saveSettings(settings?: Partial<Settings>): Promise<void> 
 	}
 
 	await browser.storage.sync.set({
-		vaults: generalSettings.vaults,
-		general_settings: {
-			showMoreActionsButton: generalSettings.showMoreActionsButton,
-			betaFeatures: generalSettings.betaFeatures,
-			legacyMode: generalSettings.legacyMode,
-			silentOpen: generalSettings.silentOpen,
-			openBehavior: generalSettings.openBehavior,
-			saveBehavior: generalSettings.saveBehavior,
-		},
-		highlighter_settings: {
-			highlighterEnabled: generalSettings.highlighterEnabled,
-			alwaysShowHighlights: generalSettings.alwaysShowHighlights,
-			highlightBehavior: generalSettings.highlightBehavior
-		},
-		interpreter_settings: {
-			interpreterModel: generalSettings.interpreterModel,
-			models: generalSettings.models,
-			providers: generalSettings.providers,
-			interpreterEnabled: generalSettings.interpreterEnabled,
-			interpreterAutoRun: generalSettings.interpreterAutoRun,
-			defaultPromptContext: generalSettings.defaultPromptContext
-		},
-		property_types: generalSettings.propertyTypes,
-		reader_settings: {
-			fontSize: generalSettings.readerSettings.fontSize,
-			lineHeight: generalSettings.readerSettings.lineHeight,
-			maxWidth: generalSettings.readerSettings.maxWidth,
-			lightTheme: generalSettings.readerSettings.lightTheme,
-			darkTheme: generalSettings.readerSettings.darkTheme,
-			appearance: generalSettings.readerSettings.appearance,
-			fonts: generalSettings.readerSettings.fonts,
-			defaultFont: generalSettings.readerSettings.defaultFont,
-			blendImages: generalSettings.readerSettings.blendImages,
-			colorLinks: generalSettings.readerSettings.colorLinks,
-			followLinks: generalSettings.readerSettings.followLinks,
-			pinPlayer: generalSettings.readerSettings.pinPlayer,
-			autoScroll: generalSettings.readerSettings.autoScroll,
-			highlightActiveLine: generalSettings.readerSettings.highlightActiveLine,
-			customCss: generalSettings.readerSettings.customCss
-		},
-		stats: generalSettings.stats
-	});
+			vaults: generalSettings.vaults,
+			general_settings: {
+				showMoreActionsButton: generalSettings.showMoreActionsButton,
+				betaFeatures: generalSettings.betaFeatures,
+				legacyMode: generalSettings.legacyMode,
+				silentOpen: generalSettings.silentOpen,
+				openBehavior: generalSettings.openBehavior,
+				saveBehavior: generalSettings.saveBehavior,
+				useIgnis: generalSettings.useIgnis,
+				ignisUrl: generalSettings.ignisUrl,
+				ignisAuthToken: generalSettings.ignisAuthToken,
+			},
+			highlighter_settings: {
+				highlighterEnabled: generalSettings.highlighterEnabled,
+				alwaysShowHighlights: generalSettings.alwaysShowHighlights,
+				highlightBehavior: generalSettings.highlightBehavior
+			},
+			interpreter_settings: {
+				interpreterModel: generalSettings.interpreterModel,
+				models: generalSettings.models,
+				providers: generalSettings.providers,
+				interpreterEnabled: generalSettings.interpreterEnabled,
+				interpreterAutoRun: generalSettings.interpreterAutoRun,
+				defaultPromptContext: generalSettings.defaultPromptContext
+			},
+			property_types: generalSettings.propertyTypes,
+			reader_settings: {
+				fontSize: generalSettings.readerSettings.fontSize,
+				lineHeight: generalSettings.readerSettings.lineHeight,
+				maxWidth: generalSettings.readerSettings.maxWidth,
+				lightTheme: generalSettings.readerSettings.lightTheme,
+				darkTheme: generalSettings.readerSettings.darkTheme,
+				appearance: generalSettings.readerSettings.appearance,
+				fonts: generalSettings.readerSettings.fonts,
+				defaultFont: generalSettings.readerSettings.defaultFont,
+				blendImages: generalSettings.readerSettings.blendImages,
+				colorLinks: generalSettings.readerSettings.colorLinks,
+				followLinks: generalSettings.readerSettings.followLinks,
+				pinPlayer: generalSettings.readerSettings.pinPlayer,
+				autoScroll: generalSettings.readerSettings.autoScroll,
+				highlightActiveLine: generalSettings.readerSettings.highlightActiveLine,
+				customCss: generalSettings.readerSettings.customCss
+			},
+			stats: generalSettings.stats
+		});
 }
 
 export async function setLegacyMode(enabled: boolean): Promise<void> {

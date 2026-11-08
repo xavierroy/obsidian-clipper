@@ -46,10 +46,14 @@ export const generalSettings: Settings = {
 		copyToClipboard: 0,
 		share: 0,
 		readerMode: 0,
+		addToIgnis: 0,
 	},
 	history: [],
 	ratings: [],
 	saveBehavior: 'addToObsidian',
+	useIgnis: false,
+	ignisUrl: '',
+	ignisAuthToken: ''
 };
 
 export const loadSettings = async () => {};

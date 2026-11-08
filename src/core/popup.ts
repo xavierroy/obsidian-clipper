@@ -1,7 +1,7 @@
 import dayjs from 'dayjs';
 import { Template, Property, PromptVariable } from '../types/types';
 import { incrementStat, addHistoryEntry, getClipHistory } from '../utils/storage-utils';
-import { generateFrontmatter, saveToObsidian } from '../utils/obsidian-note-creator';
+import { generateFrontmatter, saveToIgnis, saveToObsidian } from '../utils/obsidian-note-creator';
 import { extractPageContent, initializePageContent } from '../utils/content-extractor';
 import { compileTemplate } from '../utils/template-compiler';
 import { initializeIcons, getPropertyTypeIcon } from '../icons/icons';
@@ -605,17 +605,20 @@ async function initializeUI() {
 	}
 }
 
-function showError(messageKey: string): void {
+function showStatus(message: string): void {
 	const errorMessage = document.querySelector('.error-message') as HTMLElement;
 	const clipper = document.querySelector('.clipper') as HTMLElement;
 
 	if (errorMessage && clipper) {
-		errorMessage.textContent = getMessage(messageKey);
+		errorMessage.textContent = message;
 		errorMessage.style.display = 'flex';
 		clipper.style.display = 'none';
 
 		document.body.classList.add('has-error');
 	}
+}
+function showError(messageKey: string): void {
+	showStatus(getMessage(messageKey));
 }
 function clearError(): void {
 	const errorMessage = document.querySelector('.error-message') as HTMLElement;
@@ -1302,6 +1305,14 @@ function determineMainAction() {
 			addSecondaryAction(secondaryActions, 'addToObsidian', () => handleClipObsidian());
 			addSecondaryAction(secondaryActions, 'copyToClipboard', copyContent);
 			break;
+		case 'addToIgnis':
+			mainButton.textContent = getMessage('addToIgnis');
+			mainButton.onclick = () => handleClipIgnis();
+			// Add direct actions to secondary
+			addSecondaryAction(secondaryActions, 'addToObsidian', () => handleClipObsidian());
+			addSecondaryAction(secondaryActions, 'copyToClipboard', copyContent);
+			addSecondaryAction(secondaryActions, 'saveFile', handleSaveToDownloads);
+			break;
 		default: // 'addToObsidian'
 			mainButton.textContent = getMessage('addToObsidian');
 			mainButton.onclick = () => handleClipObsidian();
@@ -1365,6 +1376,97 @@ async function handleClipObsidian(): Promise<void> {
 	}
 }
 
+async function handleClipIgnis(): Promise<void> {
+	if (!currentTemplate) return;
+
+	const vaultDropdown = document.getElementById('vault-select') as HTMLSelectElement;
+	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement;
+	const noteNameField = document.getElementById('note-name-field') as HTMLInputElement;
+	const pathField = document.getElementById('path-name-field') as HTMLInputElement;
+	const interpretBtn = document.getElementById('interpret-btn') as HTMLButtonElement;
+
+	if (!vaultDropdown || !noteContentField) {
+		showError('Some required fields are missing. Please try reloading the extension.');
+		return;
+	}
+
+	try {
+		let ignisBaseUrl: URL;
+		try {
+			ignisBaseUrl = new URL(generalSettings.ignisUrl.trim());
+		} catch {
+			throw new Error('Invalid Ignis URL. Open extension settings and enter a complete URL including https://.');
+		}
+		if (!['http:', 'https:'].includes(ignisBaseUrl.protocol) || !ignisBaseUrl.hostname) {
+			throw new Error('Invalid Ignis URL. Use an HTTP or HTTPS address in extension settings.');
+		}
+
+		if (generalSettings.interpreterEnabled && interpretBtn && collectPromptVariables(currentTemplate).length > 0) {
+			if (interpretBtn.classList.contains('processing')) {
+				await waitForInterpreter(interpretBtn);
+			} else if (!interpretBtn.classList.contains('done')) {
+				interpretBtn.click();
+				await waitForInterpreter(interpretBtn);
+			}
+		}
+
+		// Gather content
+		const properties = getPropertiesFromDOM();
+
+		const frontmatter = await generateFrontmatter(properties);
+		const fileContent = frontmatter + noteContentField.value;
+		console.log('[Ignis] Content length:', fileContent.length);
+
+		// Get vault from dropdown or Ignis URL
+		let selectedVault = vaultDropdown.value || currentTemplate.vault || 'Inbox';
+
+		// If user provided an Ignis URL with vault parameter, extract it
+		const urlVault = ignisBaseUrl.searchParams.get('vault');
+		if (urlVault) {
+			selectedVault = urlVault;
+		}
+
+		const isDailyNote = currentTemplate.behavior === 'append-daily' || currentTemplate.behavior === 'prepend-daily';
+		const noteName = isDailyNote ? '' : noteNameField?.value || '';
+		const path = isDailyNote ? '' : pathField?.value || '';
+
+		const saveResult = await saveToIgnis(fileContent, noteName, path, selectedVault, currentTemplate.behavior);
+		const wordCount = noteContentField.value.trim().split(/\s+/).filter(Boolean).length;
+		const messageKey = saveResult.verified ? 'savedToIgnisVerified' : 'savedToIgnisDetails';
+		showStatus(getMessage(messageKey, [saveResult.path, String(wordCount), String(saveResult.byteCount)]));
+		const tabInfo = await getCurrentTabInfo();
+		await incrementStat('addToIgnis', selectedVault, path, tabInfo.url, tabInfo.title);
+
+		lastSelectedVault = selectedVault;
+		await setLocalStorage('lastSelectedVault', lastSelectedVault);
+
+		if (!isSidePanel) {
+			setTimeout(() => window.close(), 2000);
+		}
+	} catch (error: unknown) {
+		console.error('[Ignis] Error in handleClipIgnis:', error);
+
+		if (error instanceof Error && error.message.startsWith('Cannot connect to Ignis:')) {
+			showError(error.message);
+		} else if (error instanceof Error && error.message.startsWith('Host permission not granted')) {
+			showError(error.message);
+		} else if (error instanceof Error && error.message.startsWith('Invalid Ignis URL.')) {
+			showError(error.message);
+		} else if (error instanceof Error && (
+			error.message.startsWith('Ignis API error:')
+			|| error.message.startsWith('Ignis accepted the request')
+			|| error.message.startsWith('Ignis reported writing')
+			|| error.message.startsWith('Cannot verify Ignis write')
+			|| error.message.startsWith('Ignis saved ')
+		)) {
+			showError(error.message);
+		} else {
+			showError('failedToSaveFile');
+		}
+		throw error;
+	}
+}
+
 function addSecondaryAction(container: Element, actionType: string, handler: () => void) {
 	const menuItem = document.createElement('div');
 	menuItem.className = 'menu-item';
@@ -1397,6 +1499,7 @@ function getActionIcon(actionType: string): string {
 		case 'copyToClipboard': return 'copy';
 		case 'saveFile': return 'file-down';
 		case 'addToObsidian': return 'pen-line';
+		case 'addToIgnis': return 'cloud-download';
 		default: return 'plus';
 	}
 }
